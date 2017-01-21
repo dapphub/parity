@@ -51,6 +51,8 @@ pub enum Api {
 	Traces,
 	/// Rpc (Safe)
 	Rpc,
+        /// Nexus (Safe)
+        Nexus,
 }
 
 impl FromStr for Api {
@@ -70,6 +72,7 @@ impl FromStr for Api {
 			"parity_set" => Ok(ParitySet),
 			"traces" => Ok(Traces),
 			"rpc" => Ok(Rpc),
+                        "nexus" => Ok(Nexus),
 			api => Err(format!("Unknown api: {}", api))
 		}
 	}
@@ -137,6 +140,7 @@ fn to_modules(apis: &[Api]) -> BTreeMap<String, String> {
 			Api::ParitySet => ("parity_set", "1.0"),
 			Api::Traces => ("traces", "1.0"),
 			Api::Rpc => ("rpc", "1.0"),
+                        Api::Nexus => ("nexus", "1.0"),
 		};
 		modules.insert(name.into(), version.into());
 	}
@@ -248,7 +252,10 @@ pub fn setup_rpc<T: Extendable>(server: T, deps: Arc<Dependencies>, apis: ApiSet
 			Api::Rpc => {
 				let modules = to_modules(&apis);
 				server.add_delegate(RpcClient::new(modules).to_delegate());
-			}
+			},
+                        Api::Nexus => {
+                        	server.add_delegate(NexusClient::new(&deps.client).to_delegate())
+                        }
 		}
 	}
 	server

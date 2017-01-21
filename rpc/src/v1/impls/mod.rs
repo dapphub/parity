@@ -38,6 +38,7 @@ mod signing_unsafe;
 mod rpc;
 mod traces;
 mod web3;
+mod nexus;
 
 pub use self::web3::Web3Client;
 pub use self::eth::{EthClient, EthClientOptions};
@@ -52,3 +53,4 @@ pub use self::signing::SigningQueueClient;
 pub use self::signing_unsafe::SigningUnsafeClient;
 pub use self::traces::TracesClient;
 pub use self::rpc::RpcClient;
+pub use self::nexus::NexusClient;
