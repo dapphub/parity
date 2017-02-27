@@ -491,7 +491,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 		let miner = take_weak!(self.miner);
 		let client = take_weak!(self.client);
 		let block_number = client.chain_info().best_block_number;
-		Ok(self.transaction(TransactionId::Hash(hash))?.or_else(|| miner.transaction(block_number, &hash).map(|t| Transaction::from_signed(t, block_number, self.eip86_transition))))
+		Ok(self.transaction(TransactionId::Hash(hash))?.or_else(|| miner.transaction(block_number, &hash).map(|t| Transaction::from_pending(t, block_number, self.eip86_transition))))
 	}
 
 	fn transaction_by_block_hash_and_index(&self, hash: RpcH256, index: Index) -> Result<Option<Transaction>, Error> {
