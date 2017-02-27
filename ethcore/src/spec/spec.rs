@@ -55,6 +55,8 @@ pub struct CommonParams {
 	pub fork_block: Option<(BlockNumber, H256)>,
 	/// Number of first block where EIP-98 rules begin.
 	pub eip98_transition: BlockNumber,
+	/// Number of first block where EIP-86 (Metropolis) rules begin.
+	pub eip86_transition: BlockNumber,
 }
 
 impl From<ethjson::spec::Params> for CommonParams {
@@ -68,6 +70,7 @@ impl From<ethjson::spec::Params> for CommonParams {
 			min_gas_limit: p.min_gas_limit.into(),
 			fork_block: if let (Some(n), Some(h)) = (p.fork_block, p.fork_hash) { Some((n.into(), h.into())) } else { None },
 			eip98_transition: p.eip98_transition.map_or(0, Into::into),
+			eip86_transition: p.eip86_transition.map_or(0, Into::into),
 		}
 	}
 }
@@ -305,7 +308,7 @@ impl Spec {
 			let mut substate = Substate::new();
 			{
 				let mut exec = Executive::new(&mut state, &env_info, self.engine.as_ref(), &factories.vm);
-				if let Err(e) = exec.create(params, &mut substate, &mut NoopTracer, &mut NoopVMTracer) {
+				if let Err(e) = exec.create(params, &mut substate, &mut NoopTracer, &mut NoopVMTracer, true) {
 					warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
 				}
 			}

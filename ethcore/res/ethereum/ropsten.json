@@ -27,7 +27,8 @@
 		"networkID" : "0x3",
 		"forkBlock": 333922,
 		"forkCanonHash": "0x8737eb141d4f05db57af63fc8d3b4d4d8f9cddb0c4e1ab855de8c288fdc1924f",
-		"eip98Transition": "0x7fffffffffffff"
+		"eip98Transition": "0x7fffffffffffff",
+		"eip86Transition": "0x7fffffffffffff"
 	},
 	"genesis": {
 		"seal": {

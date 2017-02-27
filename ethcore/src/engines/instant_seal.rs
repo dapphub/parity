@@ -18,10 +18,10 @@ use std::collections::BTreeMap;
 use util::Address;
 use builtin::Builtin;
 use engines::{Engine, Seal};
-use env_info::EnvInfo;
 use spec::CommonParams;
 use evm::Schedule;
 use block::ExecutedBlock;
+use header::BlockNumber;
 
 /// An engine which does not provide any consensus mechanism, just seals blocks internally.
 pub struct InstantSeal {
@@ -52,8 +52,9 @@ impl Engine for InstantSeal {
 		&self.builtins
 	}
 
-	fn schedule(&self, _env_info: &EnvInfo) -> Schedule {
-		Schedule::new_post_eip150(usize::max_value(), true, true, true)
+	fn schedule(&self, block_number: BlockNumber) -> Schedule {
+		let eip86 = block_number >= self.params.eip98_transition;
+		Schedule::new_post_eip150(usize::max_value(), true, true, true, eip86)
 	}
 
 	fn is_sealer(&self, _author: &Address) -> Option<bool> { Some(true) }

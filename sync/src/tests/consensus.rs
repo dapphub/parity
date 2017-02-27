@@ -41,7 +41,7 @@ impl IoHandler<ClientIoMessage> for TestIoHandler {
 	}
 }
 
-fn new_tx(secret: &Secret, nonce: U256) -> PendingTransaction {
+fn new_tx(secret: &Secret, nonce: U256, network_id: u64) -> PendingTransaction {
 	let signed = Transaction {
 		nonce: nonce.into(),
 		gas_price: 0.into(),
@@ -49,7 +49,7 @@ fn new_tx(secret: &Secret, nonce: U256) -> PendingTransaction {
 		action: Action::Call(Address::default()),
 		value: 0.into(),
 		data: Vec::new(),
-	}.sign(secret, None);
+	}.sign(secret, Some(network_id));
 	PendingTransaction::new(signed, None)
 }
 
@@ -61,6 +61,7 @@ fn authority_round() {
 	ap.insert_account(s0.secret().clone(), "").unwrap();
 	ap.insert_account(s1.secret().clone(), "").unwrap();
 
+	let network_id = Spec::new_test_round().network_id();
 	let mut net = TestNet::with_spec_and_accounts(2, SyncConfig::default(), Spec::new_test_round, Some(ap));
 	let mut net = &mut *net;
 	let io_handler0: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler { client: net.peer(0).chain.clone() });
@@ -75,15 +76,15 @@ fn authority_round() {
 	// exchange statuses
 	net.sync();
 	// Trigger block proposal
-	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 0.into())).unwrap();
-	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 0.into())).unwrap();
+	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 0.into(), network_id)).unwrap();
+	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 0.into(), network_id)).unwrap();
 	// Sync a block
 	net.sync();
 	assert_eq!(net.peer(0).chain.chain_info().best_block_number, 1);
 	assert_eq!(net.peer(1).chain.chain_info().best_block_number, 1);
 
-	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 1.into())).unwrap();
-	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 1.into())).unwrap();
+	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 1.into(), network_id)).unwrap();
+	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 1.into(), network_id)).unwrap();
 	// Move to next proposer step
 	net.peer(0).chain.engine().step();
 	net.peer(1).chain.engine().step();
@@ -92,8 +93,8 @@ fn authority_round() {
 	assert_eq!(net.peer(1).chain.chain_info().best_block_number, 2);
 
 	// Fork the network
-	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 2.into())).unwrap();
-	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 2.into())).unwrap();
+	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 2.into(), network_id)).unwrap();
+	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 2.into(), network_id)).unwrap();
 	net.peer(0).chain.engine().step();
 	net.peer(1).chain.engine().step();
 	net.peer(0).chain.engine().step();
@@ -120,6 +121,7 @@ fn tendermint() {
 	ap.insert_account(s0.secret().clone(), "").unwrap();
 	ap.insert_account(s1.secret().clone(), "").unwrap();
 
+	let network_id = Spec::new_test_tendermint().network_id();
 	let mut net = TestNet::with_spec_and_accounts(2, SyncConfig::default(), Spec::new_test_tendermint, Some(ap));
 	let mut net = &mut *net;
 	let io_handler0: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler { client: net.peer(0).chain.clone() });
@@ -136,7 +138,7 @@ fn tendermint() {
 	// Exhange statuses
 	net.sync();
 	// Propose
-	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 0.into())).unwrap();
+	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 0.into(), network_id)).unwrap();
 	net.sync();
 	// Propose timeout, synchronous for now
 	net.peer(0).chain.engine().step();
@@ -147,7 +149,7 @@ fn tendermint() {
 	assert_eq!(net.peer(0).chain.chain_info().best_block_number, 1);
 	assert_eq!(net.peer(1).chain.chain_info().best_block_number, 1);
 
-	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 0.into())).unwrap();
+	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 0.into(), network_id)).unwrap();
 	// Commit timeout
 	net.peer(0).chain.engine().step();
 	net.peer(1).chain.engine().step();
@@ -161,8 +163,8 @@ fn tendermint() {
 	assert_eq!(net.peer(0).chain.chain_info().best_block_number, 2);
 	assert_eq!(net.peer(1).chain.chain_info().best_block_number, 2);
 
-	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 1.into())).unwrap();
-	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 1.into())).unwrap();
+	net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 1.into(), network_id)).unwrap();
+	net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 1.into(), network_id)).unwrap();
 	// Peers get disconnected.
 	// Commit
 	net.peer(0).chain.engine().step();
@@ -170,8 +172,8 @@ fn tendermint() {
 	// Propose
 	net.peer(0).chain.engine().step();
 	net.peer(1).chain.engine().step();
-net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 2.into())).unwrap();
-		net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 2.into())).unwrap();
+net.peer(0).chain.miner().import_own_transaction(&*net.peer(0).chain, new_tx(s0.secret(), 2.into(), network_id)).unwrap();
+		net.peer(1).chain.miner().import_own_transaction(&*net.peer(1).chain, new_tx(s1.secret(), 2.into(), network_id)).unwrap();
 	// Send different prevotes
 	net.sync();
 	// Prevote timeout

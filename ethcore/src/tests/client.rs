@@ -306,7 +306,7 @@ fn does_not_propagate_delayed_transactions() {
 		action: Action::Call(Address::default()),
 		value: 0.into(),
 		data: Vec::new(),
-	}.sign(secret, None), Some(Condition::Number(2)));
+	}.sign(secret, Some(2)), Some(Condition::Number(2)));
 	let tx1 = PendingTransaction::new(Transaction {
 		nonce: 1.into(),
 		gas_price: 0.into(),
@@ -314,7 +314,7 @@ fn does_not_propagate_delayed_transactions() {
 		action: Action::Call(Address::default()),
 		value: 0.into(),
 		data: Vec::new(),
-	}.sign(secret, None), None);
+	}.sign(secret, Some(2)), None);
 	let client_result = generate_dummy_client(1);
 	let client = client_result.reference();
 

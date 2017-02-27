@@ -89,6 +89,7 @@ pub struct EthClient<C, SN: ?Sized, S: ?Sized, M, EM> where
 	external_miner: Arc<EM>,
 	seed_compute: Mutex<SeedHashCompute>,
 	options: EthClientOptions,
+	eip86_transition: u64,
 }
 
 impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
@@ -117,6 +118,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 			external_miner: em.clone(),
 			seed_compute: Mutex::new(SeedHashCompute::new()),
 			options: options,
+			eip86_transition: client.eip86_transition(),
 		}
 	}
 
@@ -146,7 +148,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 						seal_fields: view.seal().into_iter().map(Into::into).collect(),
 						uncles: block.uncle_hashes().into_iter().map(Into::into).collect(),
 						transactions: match include_txs {
-							true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Into::into).collect()),
+							true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(|t| Transaction::from_localized(t, self.eip86_transition)).collect()),
 							false => BlockTransactions::Hashes(block.transaction_hashes().into_iter().map(Into::into).collect()),
 						},
 						extra_data: Bytes::new(view.extra_data()),
@@ -160,7 +162,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 
 	fn transaction(&self, id: TransactionId) -> Result<Option<Transaction>, Error> {
 		match take_weak!(self.client).transaction(id) {
-			Some(t) => Ok(Some(Transaction::from(t))),
+			Some(t) => Ok(Some(Transaction::from_localized(t, self.eip86_transition))),
 			None => Ok(None),
 		}
 	}
@@ -467,7 +469,8 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 		let hash: H256 = hash.into();
 		let miner = take_weak!(self.miner);
 		let client = take_weak!(self.client);
-		Ok(self.transaction(TransactionId::Hash(hash))?.or_else(|| miner.transaction(client.chain_info().best_block_number, &hash).map(Into::into)))
+		let block_number = client.chain_info().best_block_number;
+		Ok(self.transaction(TransactionId::Hash(hash))?.or_else(|| miner.transaction(block_number, &hash).map(|t| Transaction::from_signed(t, block_number, self.eip86_transition))))
 	}
 
 	fn transaction_by_block_hash_and_index(&self, hash: RpcH256, index: Index) -> Result<Option<Transaction>, Error> {

@@ -42,7 +42,7 @@ use env_info::EnvInfo;
 use error::Error;
 use spec::CommonParams;
 use evm::Schedule;
-use header::Header;
+use header::{Header, BlockNumber};
 use transaction::{UnverifiedTransaction, SignedTransaction};
 use client::Client;
 
@@ -107,8 +107,8 @@ pub trait Engine : Sync + Send {
 	/// Get the general parameters of the chain.
 	fn params(&self) -> &CommonParams;
 
-	/// Get the EVM schedule for the given `env_info`.
-	fn schedule(&self, env_info: &EnvInfo) -> Schedule;
+	/// Get the EVM schedule for the given `block_number`.
+	fn schedule(&self, block_number: BlockNumber) -> Schedule;
 
 	/// Builtin-contracts we would like to see in the chain.
 	/// (In principle these are just hints for the engine since that has the last word on them.)
@@ -157,7 +157,7 @@ pub trait Engine : Sync + Send {
 	// TODO: Add flags for which bits of the transaction to check.
 	// TODO: consider including State in the params.
 	fn verify_transaction_basic(&self, t: &UnverifiedTransaction, _header: &Header) -> Result<(), Error> {
-		t.check_low_s()?;
+		t.verify_basic(true, Some(self.params().network_id), true)?;
 		Ok(())
 	}
 
@@ -167,7 +167,9 @@ pub trait Engine : Sync + Send {
 	}
 
 	/// The network ID that transactions should be signed with.
-	fn signing_network_id(&self, _env_info: &EnvInfo) -> Option<u64> { None }
+	fn signing_network_id(&self, _env_info: &EnvInfo) -> Option<u64> {
+		Some(self.params().chain_id)
+	}
 
 	/// Verify the seal of a block. This is an auxilliary method that actually just calls other `verify_` methods
 	/// to get the job done. By default it must pass `verify_basic` and `verify_block_unordered`. If more or fewer

@@ -21,8 +21,9 @@ use state::{State, Substate};
 use engines::Engine;
 use env_info::EnvInfo;
 use executive::*;
-use evm::{self, Schedule, Ext, ContractCreateResult, MessageCallResult, Factory};
+use evm::{self, Schedule, Ext, ContractCreateResult, MessageCallResult, Factory, CreateContractAddress};
 use types::executed::CallType;
+use types::transaction::UNSIGNED_SENDER;
 use trace::{Tracer, VMTracer};
 
 /// Policy for handling output data on `RETURN` opcode.
@@ -93,7 +94,7 @@ impl<'a, T, V> Externalities<'a, T, V> where T: 'a + Tracer, V: 'a + VMTracer {
 			depth: depth,
 			origin_info: origin_info,
 			substate: substate,
-			schedule: engine.schedule(env_info),
+			schedule: engine.schedule(env_info.number),
 			output: output,
 			tracer: tracer,
 			vm_tracer: vm_tracer,
@@ -141,9 +142,10 @@ impl<'a, T, V> Ext for Externalities<'a, T, V> where T: 'a + Tracer, V: 'a + VMT
 		}
 	}
 
-	fn create(&mut self, gas: &U256, value: &U256, code: &[u8]) -> ContractCreateResult {
+	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address_scheme: CreateContractAddress) -> ContractCreateResult {
 		// create new contract address
-		let address = contract_address(&self.origin_info.address, &self.state.nonce(&self.origin_info.address));
+		let code_hash = code.sha3();
+		let address = contract_address(address_scheme, &self.origin_info.address, &self.state.nonce(&self.origin_info.address), &code_hash);
 
 		// prepare the params
 		let params = ActionParams {
@@ -155,16 +157,18 @@ impl<'a, T, V> Ext for Externalities<'a, T, V> where T: 'a + Tracer, V: 'a + VMT
 			gas_price: self.origin_info.gas_price,
 			value: ActionValue::Transfer(*value),
 			code: Some(Arc::new(code.to_vec())),
-			code_hash: code.sha3(),
+			code_hash: code_hash,
 			data: None,
 			call_type: CallType::None,
 		};
 
-		self.state.inc_nonce(&self.origin_info.address);
+		if params.sender != UNSIGNED_SENDER {
+			self.state.inc_nonce(&self.origin_info.address);
+		}
 		let mut ex = Executive::from_parent(self.state, self.env_info, self.engine, self.vm_factory, self.depth);
 
 		// TODO: handle internal error separately
-		match ex.create(params, self.substate, self.tracer, self.vm_tracer) {
+		match ex.create(params, self.substate, self.tracer, self.vm_tracer, false) {
 			Ok(gas_left) => {
 				self.substate.contracts_created.push(address.clone());
 				ContractCreateResult::Created(address, gas_left)

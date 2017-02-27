@@ -21,7 +21,7 @@ use executive::*;
 use engines::Engine;
 use env_info::EnvInfo;
 use evm;
-use evm::{Schedule, Ext, Factory, Finalize, VMType, ContractCreateResult, MessageCallResult};
+use evm::{Schedule, Ext, Factory, Finalize, VMType, ContractCreateResult, MessageCallResult, CreateContractAddress};
 use externalities::*;
 use types::executed::CallType;
 use tests::helpers::*;
@@ -54,7 +54,8 @@ impl From<ethjson::vm::Call> for CallCreate {
 struct TestExt<'a, T, V> where T: 'a + Tracer, V: 'a + VMTracer {
 	ext: Externalities<'a, T, V>,
 	callcreates: Vec<CallCreate>,
-	contract_address: Address
+	nonce: U256,
+	sender: Address,
 }
 
 impl<'a, T, V> TestExt<'a, T, V> where T: 'a + Tracer, V: 'a + VMTracer {
@@ -72,9 +73,10 @@ impl<'a, T, V> TestExt<'a, T, V> where T: 'a + Tracer, V: 'a + VMTracer {
 		vm_tracer: &'a mut V,
 	) -> Self {
 		TestExt {
-			contract_address: contract_address(&address, &state.nonce(&address)),
+			nonce: state.nonce(&address),
 			ext: Externalities::new(state, info, engine, vm_factory, depth, origin_info, substate, output, tracer, vm_tracer),
-			callcreates: vec![]
+			callcreates: vec![],
+			sender: address,
 		}
 	}
 }
@@ -108,14 +110,15 @@ impl<'a, T, V> Ext for TestExt<'a, T, V> where T: Tracer, V: VMTracer {
 		self.ext.blockhash(number)
 	}
 
-	fn create(&mut self, gas: &U256, value: &U256, code: &[u8]) -> ContractCreateResult {
+	fn create(&mut self, gas: &U256, value: &U256, code: &[u8], address: CreateContractAddress) -> ContractCreateResult {
 		self.callcreates.push(CallCreate {
 			data: code.to_vec(),
 			destination: None,
 			gas_limit: *gas,
 			value: *value
 		});
-		ContractCreateResult::Created(self.contract_address.clone(), *gas)
+		let contract_address = contract_address(address, &self.sender, &self.nonce, &code.sha3());
+		ContractCreateResult::Created(contract_address, *gas)
 	}
 
 	fn call(&mut self,

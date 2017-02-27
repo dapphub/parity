@@ -253,7 +253,7 @@ impl TestBlockChainClient {
 						gas_price: U256::from(200_000_000_000u64),
 						nonce: U256::zero()
 					};
-					let signed_tx = tx.sign(keypair.secret(), None);
+					let signed_tx = tx.sign(keypair.secret(), Some(2));
 					txs.append(&signed_tx);
 					txs.out()
 				},
@@ -319,7 +319,7 @@ impl TestBlockChainClient {
 			gas_price: gas_price,
 			nonce: U256::zero()
 		};
-		let signed_tx = tx.sign(keypair.secret(), None);
+		let signed_tx = tx.sign(keypair.secret(), Some(2));
 		self.set_balance(signed_tx.sender(), 10_000_000_000_000_000_000u64.into());
 		let hash = signed_tx.hash();
 		let res = self.miner.import_external_transactions(self, vec![signed_tx.into()]);
@@ -352,7 +352,7 @@ pub fn get_temp_state_db() -> GuardedTempResult<StateDB> {
 
 impl MiningBlockChainClient for TestBlockChainClient {
 	fn latest_schedule(&self) -> Schedule {
-		Schedule::new_post_eip150(24576, true, true, true)
+		Schedule::new_post_eip150(24576, true, true, true, true)
 	}
 
 	fn prepare_open_block(&self, author: Address, gas_range_target: (U256, U256), extra_data: Bytes) -> OpenBlock {
@@ -751,6 +751,8 @@ impl BlockChainClient for TestBlockChainClient {
 	fn registrar_address(&self) -> Option<Address> { None }
 
 	fn registry_address(&self, _name: String) -> Option<Address> { None }
+
+	fn eip86_transition(&self) -> u64 { u64::max_value() }
 }
 
 impl ProvingBlockChainClient for TestBlockChainClient {

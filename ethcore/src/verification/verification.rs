@@ -414,7 +414,7 @@ mod tests {
 			gas: U256::from(30_000),
 			gas_price: U256::from(40_000),
 			nonce: U256::one()
-		}.sign(keypair.secret(), None);
+		}.sign(keypair.secret(), Some(2));
 
 		let tr2 = Transaction {
 			action: Action::Create,
@@ -423,7 +423,7 @@ mod tests {
 			gas: U256::from(30_000),
 			gas_price: U256::from(40_000),
 			nonce: U256::from(2)
-		}.sign(keypair.secret(), None);
+		}.sign(keypair.secret(), Some(2));
 
 		let good_transactions = [ tr1.clone(), tr2.clone() ];
 
