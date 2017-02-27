@@ -60,6 +60,14 @@ pub fn unimplemented(details: Option<String>) -> Error {
 	}
 }
 
+pub fn light_unimplemented(details: Option<String>) -> Error {
+	Error {
+		code: ErrorCode::ServerError(codes::UNSUPPORTED_REQUEST),
+		message: "This request is unsupported for light clients.".into(),
+		data: details.map(Value::String),
+	}
+}
+
 pub fn request_not_found() -> Error {
 	Error {
 		code: ErrorCode::ServerError(codes::REQUEST_NOT_FOUND),
@@ -122,6 +130,10 @@ pub fn state_pruned() -> Error {
 		message: "This request is not supported because your node is running with state pruning. Run with --pruning=archive.".into(),
 		data: None
 	}
+}
+
+pub fn state_corrupt() -> Error {
+	internal("State corrupt", "")
 }
 
 pub fn exceptional() -> Error {
@@ -288,6 +300,7 @@ pub fn from_rlp_error(error: DecoderError) -> Error {
 pub fn from_call_error(error: CallError) -> Error {
 	match error {
 		CallError::StatePruned => state_pruned(),
+		CallError::StateCorrupt => state_corrupt(),
 		CallError::Exceptional => exceptional(),
 		CallError::Execution(e) => execution(e),
 		CallError::TransactionNotFound => internal("{}, this should not be the case with eth_call, most likely a bug.", CallError::TransactionNotFound),

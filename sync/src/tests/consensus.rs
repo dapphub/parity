@@ -63,7 +63,6 @@ fn authority_round() {
 
 	let network_id = Spec::new_test_round().network_id();
 	let mut net = TestNet::with_spec_and_accounts(2, SyncConfig::default(), Spec::new_test_round, Some(ap));
-	let mut net = &mut *net;
 	let io_handler0: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler { client: net.peer(0).chain.clone() });
 	let io_handler1: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler { client: net.peer(1).chain.clone() });
 	// Push transaction to both clients. Only one of them gets lucky to produce a block.
@@ -123,7 +122,6 @@ fn tendermint() {
 
 	let network_id = Spec::new_test_tendermint().network_id();
 	let mut net = TestNet::with_spec_and_accounts(2, SyncConfig::default(), Spec::new_test_tendermint, Some(ap));
-	let mut net = &mut *net;
 	let io_handler0: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler { client: net.peer(0).chain.clone() });
 	let io_handler1: Arc<IoHandler<ClientIoMessage>> = Arc::new(TestIoHandler { client: net.peer(1).chain.clone() });
 	// Push transaction to both clients. Only one of them issues a proposal.

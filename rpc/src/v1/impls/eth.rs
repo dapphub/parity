@@ -223,7 +223,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 		let store = take_weak!(self.accounts);
 		store
 			.note_dapp_used(dapp.clone())
-			.and_then(|_| store.dapps_addresses(dapp))
+			.and_then(|_| store.dapp_addresses(dapp))
 			.map_err(|e| errors::internal("Could not fetch accounts.", e))
 	}
 }
@@ -310,10 +310,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 		let author = move || {
 			let mut miner = take_weak!(self.miner).author();
 			if miner == 0.into() {
-				let accounts = self.dapp_accounts(dapp.into())?;
-				if let Some(address) = accounts.get(0) {
-					miner = *address;
-				}
+				miner = self.dapp_accounts(dapp.into())?.get(0).cloned().unwrap_or_default();
 			}
 
 			Ok(RpcH160::from(miner))
@@ -354,7 +351,13 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 		let address = address.into();
 
 		let res = match num.0.clone() {
-			BlockNumber::Pending => Ok(take_weakf!(self.miner).balance(&*take_weakf!(self.client), &address).into()),
+			BlockNumber::Pending => {
+				let client = take_weakf!(self.client);
+				match take_weakf!(self.miner).balance(&*client, &address) {
+					Some(balance) => Ok(balance.into()),
+					None => Err(errors::internal("Unable to load balance from database", ""))
+				}
+			}
 			id => {
 				let client = take_weakf!(self.client);
 
@@ -374,7 +377,13 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 		let position: U256 = RpcU256::into(pos);
 
 		let res = match num.0.clone() {
-			BlockNumber::Pending => Ok(take_weakf!(self.miner).storage_at(&*take_weakf!(self.client), &address, &H256::from(position)).into()),
+			BlockNumber::Pending => {
+				let client = take_weakf!(self.client);
+				match take_weakf!(self.miner).storage_at(&*client, &address, &H256::from(position)) {
+					Some(s) => Ok(s.into()),
+					None => Err(errors::internal("Unable to load storage from database", ""))
+				}
+			}
 			id => {
 				let client = take_weakf!(self.client);
 
@@ -392,7 +401,13 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 	fn transaction_count(&self, address: RpcH160, num: Trailing<BlockNumber>) -> BoxFuture<RpcU256, Error> {
 		let address: Address = RpcH160::into(address);
 		let res = match num.0.clone() {
-			BlockNumber::Pending => Ok(take_weakf!(self.miner).nonce(&*take_weakf!(self.client), &address).into()),
+			BlockNumber::Pending => {
+				let client = take_weakf!(self.client);
+				match take_weakf!(self.miner).nonce(&*client, &address) {
+					Some(nonce) => Ok(nonce.into()),
+					None => Err(errors::internal("Unable to load nonce from database", ""))
+				}
+			}
 			id => {
 				let client = take_weakf!(self.client);
 
@@ -442,7 +457,13 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 		let address: Address = RpcH160::into(address);
 
 		let res = match num.0.clone() {
-			BlockNumber::Pending => Ok(take_weakf!(self.miner).code(&*take_weakf!(self.client), &address).map_or_else(Bytes::default, Bytes::new)),
+			BlockNumber::Pending => {
+				let client = take_weakf!(self.client);
+				match take_weakf!(self.miner).code(&*client, &address) {
+					Some(code) => Ok(code.map_or_else(Bytes::default, Bytes::new)),
+					None => Err(errors::internal("Unable to load code from database", ""))
+				}
+			}
 			id => {
 				let client = take_weakf!(self.client);
 
