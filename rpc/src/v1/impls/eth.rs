@@ -51,6 +51,7 @@ use v1::types::{
 	RichBlock, Block, BlockTransactions, BlockNumber, Bytes, SyncStatus, SyncInfo,
 	Transaction, CallRequest, Index, Filter, Log, Receipt, Work,
 	H64 as RpcH64, H256 as RpcH256, H160 as RpcH160, U256 as RpcU256,
+	LocalizedTrace,
 };
 use v1::metadata::Metadata;
 
@@ -152,6 +153,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 						extra_data: Bytes::new(view.extra_data()),
 					},
 					extra_info: client.block_extra_info(id.clone()).expect(EXTRA_INFO_PROOF),
+					traces: client.block_traces(id.clone()).map_or_else(Vec::new, |traces| traces.into_iter().map(LocalizedTrace::from).collect()),
 				}))
 			},
 			_ => Ok(None)
@@ -205,6 +207,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 				transactions: BlockTransactions::Hashes(vec![]),
 			},
 			extra_info: client.uncle_extra_info(id).expect(EXTRA_INFO_PROOF),
+			traces: vec![], // not correct
 		};
 		Ok(Some(block))
 	}
@@ -487,6 +490,14 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 
 	fn block_by_number(&self, num: BlockNumber, include_txs: bool) -> BoxFuture<Option<RichBlock>, Error> {
 		future::done(self.block(num.into(), include_txs)).boxed()
+	}
+
+	fn block_batch_by_number(&self, num: u64, count: u64) -> BoxFuture<Vec<RichBlock>, Error> {
+		println!("wait for it...");
+		let xs: Result<Vec<Option<RichBlock>>, Error> = (num..(num + count)).map(|i| self.block(BlockId::Number(i), true)).collect();
+		let xs2 = xs.map(|x| x.into_iter().filter_map(|y| y).collect());
+		println!("sending it...");
+		future::done(xs2).boxed()
 	}
 
 	fn transaction_by_hash(&self, hash: RpcH256) -> Result<Option<Transaction>, Error> {

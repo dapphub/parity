@@ -77,6 +77,10 @@ build_rpc_trait! {
 		#[rpc(async, name = "eth_getBlockByNumber")]
 		fn block_by_number(&self, BlockNumber, bool) -> BoxFuture<Option<RichBlock>, Error>;
 
+		/// DappHub: Returns many blocks starting from given number.
+		#[rpc(async, name = "eth_getBlockBatchByNumber")]
+		fn block_batch_by_number(&self, u64, u64) -> BoxFuture<Vec<RichBlock>, Error>;
+
 		/// Returns the number of transactions sent from given address at given time (block number).
 		#[rpc(async, name = "eth_getTransactionCount")]
 		fn transaction_count(&self, H160, Trailing<BlockNumber>) -> BoxFuture<U256, Error>;

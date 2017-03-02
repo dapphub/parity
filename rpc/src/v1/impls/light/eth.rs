@@ -208,6 +208,10 @@ impl Eth for EthClient {
 	fn block_by_number(&self, num: BlockNumber, include_txs: bool) -> BoxFuture<Option<RichBlock>, Error> {
 		future::err(errors::unimplemented(None)).boxed()
 	}
+	
+	fn block_batch_by_number(&self, num: u64, count: u64) -> BoxFuture<Vec<RichBlock>, Error> {
+		future::err(errors::unimplemented(None)).boxed()
+	}
 
 	fn transaction_count(&self, address: RpcH160, num: Trailing<BlockNumber>) -> BoxFuture<RpcU256, Error> {
 		self.account(address.into(), num.0.into())
