@@ -21,7 +21,7 @@ use std::time::{Instant, Duration};
 use std::sync::{Arc, Weak};
 
 use futures::{self, future, BoxFuture, Future};
-use rlp::{self, UntrustedRlp, View};
+use rlp::{self, UntrustedRlp, View, decode};
 use time::get_time;
 use util::{H160, H256, Address, FixedHash, U256, H64, Uint};
 use util::sha3::Hashable;
@@ -52,8 +52,12 @@ use v1::types::{
 	Transaction, CallRequest, Index, Filter, Log, Receipt, Work,
 	H64 as RpcH64, H256 as RpcH256, H160 as RpcH160, U256 as RpcU256,
 	LocalizedTrace,
+	H2048 as RpcH2048,
 };
 use v1::metadata::Metadata;
+
+use ethcore::encoded::{Block as EncodedBlock};
+use ethcore::receipt::{Receipt as EthReceipt};
 
 const EXTRA_INFO_PROOF: &'static str = "Object exists in in blockchain (fetched earlier), extra_info is always available if object exists; qed";
 
@@ -121,11 +125,50 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 		}
 	}
 
+  fn transactions_and_receipts(&self, block: &EncodedBlock) -> Result<(Vec<Transaction>, Vec<Receipt>), Error> {
+		let client = take_weak!(self.client);
+		let transactions: Vec<Transaction> = block.view().localized_transactions().into_iter().map(Into::into).collect();
+		let receipts_rlp = try!(client.block_receipts(&block.hash()).ok_or(Error::internal_error()));
+		let receipts: Vec<EthReceipt> = decode(&receipts_rlp);
+
+		let mut gas_accumulator: U256 = U256::zero();
+		let mut log_index_accumulator: U256 = U256::zero();
+
+    let rich_receipts: Vec<Receipt> = receipts.into_iter().zip(transactions.iter()).map(|(rx, tx)| {
+			gas_accumulator = gas_accumulator + rx.gas_used;
+			Receipt {
+				transaction_hash: Some(tx.hash.clone()),
+				transaction_index: tx.transaction_index.clone().map(RpcU256::from),
+				block_hash: tx.block_hash.clone(),
+				block_number: tx.block_number.clone(),
+				cumulative_gas_used: gas_accumulator.clone().into(),
+				gas_used: Some(rx.gas_used.clone().into()),
+				contract_address: tx.creates.clone(),
+				logs: rx.logs.into_iter().enumerate().map(|(i, e)| {
+					let mut log = Log::from(e);
+					log_index_accumulator = U256::from(1) + log_index_accumulator;
+					log.log_index = Some(log_index_accumulator.into());
+					log.transaction_log_index = Some(i.into());
+					log
+				}).collect(),
+				state_root: rx.state_root.clone().map(RpcH256::from),
+				logs_bloom: RpcH2048::from(rx.log_bloom.clone()),
+			}
+		}).collect();
+
+		Ok((transactions, rich_receipts))
+	}
+
 	fn block(&self, id: BlockId, include_txs: bool) -> Result<Option<RichBlock>, Error> {
 		let client = take_weak!(self.client);
 		match (client.block(id.clone()), client.block_total_difficulty(id)) {
 			(Some(block), Some(total_difficulty)) => {
 				let view = block.header_view();
+				let (transactions, receipts) = try!(if include_txs {
+					self.transactions_and_receipts(&block)
+				} else {
+					Ok((vec![], vec![]))
+				});
 				Ok(Some(RichBlock {
 					block: Block {
 						hash: Some(view.sha3().into()),
@@ -147,13 +190,15 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 						seal_fields: view.seal().into_iter().map(Into::into).collect(),
 						uncles: block.uncle_hashes().into_iter().map(Into::into).collect(),
 						transactions: match include_txs {
-							true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Into::into).collect()),
+							true => BlockTransactions::Full(transactions),
 							false => BlockTransactions::Hashes(block.transaction_hashes().into_iter().map(Into::into).collect()),
 						},
 						extra_data: Bytes::new(view.extra_data()),
 					},
 					extra_info: client.block_extra_info(id.clone()).expect(EXTRA_INFO_PROOF),
 					traces: client.block_traces(id.clone()).map_or_else(Vec::new, |traces| traces.into_iter().map(LocalizedTrace::from).collect()),
+					receipts: receipts,
+					// receipts: block.view().localized_transactions().into_iter().filter_map(|t| client.transaction_receipt(TransactionId::Hash(t.hash())).map(|x| x.into())).collect(),
 				}))
 			},
 			_ => Ok(None)
@@ -208,6 +253,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> EthClient<C, SN, S, M, EM> where
 			},
 			extra_info: client.uncle_extra_info(id).expect(EXTRA_INFO_PROOF),
 			traces: vec![], // not correct
+			receipts: vec![], // not correct
 		};
 		Ok(Some(block))
 	}
@@ -493,10 +539,8 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM> Eth for EthClient<C, SN, S, M, EM> where
 	}
 
 	fn block_batch_by_number(&self, num: u64, count: u64) -> BoxFuture<Vec<RichBlock>, Error> {
-		println!("wait for it...");
 		let xs: Result<Vec<Option<RichBlock>>, Error> = (num..(num + count)).map(|i| self.block(BlockId::Number(i), true)).collect();
 		let xs2 = xs.map(|x| x.into_iter().filter_map(|y| y).collect());
-		println!("sending it...");
 		future::done(xs2).boxed()
 	}
 

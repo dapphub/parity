@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use serde::{Serialize, Serializer};
 use serde::ser::Error;
 use v1::types::{Bytes, Transaction, H160, H256, H2048, U256};
-use v1::types::LocalizedTrace;
+use v1::types::{LocalizedTrace, Receipt};
 
 /// Block Transactions
 #[derive(Debug)]
@@ -107,6 +107,7 @@ pub struct RichBlock {
 	// TODO [ToDr] #[serde(skip_serializing)]
 	pub extra_info: BTreeMap<String, String>,
 	pub traces: Vec<LocalizedTrace>,
+	pub receipts: Vec<Receipt>,
 }
 
 impl Deref for RichBlock {
@@ -120,11 +121,12 @@ impl Serialize for RichBlock {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		use serde_json::{to_value, Value};
 
-		let serialized = (to_value(&self.block), to_value(&self.extra_info), to_value(&self.traces));
-		if let (Ok(Value::Object(mut block)), Ok(Value::Object(extras)), Ok(Value::Array(traces))) = serialized {
+		let serialized = (to_value(&self.block), to_value(&self.extra_info), to_value(&self.traces), to_value(&self.receipts));
+		if let (Ok(Value::Object(mut block)), Ok(Value::Object(extras)), Ok(traces), Ok(receipts)) = serialized {
 			// join two objects
 			block.extend(extras);
-			block.insert(String::from("traces"), Value::Array(traces));
+			block.insert(String::from("traces"), traces);
+			block.insert(String::from("receipts"), receipts);
 			// and serialize
 			block.serialize(serializer)
 		} else {
