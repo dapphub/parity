@@ -13,9 +13,12 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+extern crate postgres;
+
 
 use std::collections::{HashSet, HashMap, BTreeMap, VecDeque};
 use std::str::FromStr;
+use std::string;
 use std::sync::{Arc, Weak};
 use std::fmt;
 use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering as AtomicOrdering};
@@ -33,7 +36,7 @@ use util::kvdb::*;
 use io::*;
 use views::BlockView;
 use error::{ImportError, ExecutionError, CallError, BlockError, ImportResult, Error as EthcoreError};
-use header::BlockNumber;
+use header::*;
 use state::{State, CleanupMode};
 use spec::Spec;
 use basic_types::Seal;
@@ -71,6 +74,7 @@ use state_db::StateDB;
 use rand::OsRng;
 use client::registry::Registry;
 use encoded;
+use self::postgres::{Connection, TlsMode};
 
 // re-export
 pub use types::blockchain_info::BlockChainInfo;
@@ -155,6 +159,7 @@ pub struct Client {
 	registrar: Mutex<Option<Registry>>,
 }
 
+
 impl Client {
 	/// Create a new client with given parameters.
 	/// The database is assumed to have been initialized with the correct columns.
@@ -165,6 +170,7 @@ impl Client {
 		miner: Arc<Miner>,
 		message_channel: IoChannel<ClientIoMessage>,
 	) -> Result<Arc<Client>, ClientError> {
+
 
 		let trie_spec = match config.fat_db {
 			true => TrieSpec::Fat,
@@ -214,6 +220,7 @@ impl Client {
 		panic_handler.forward_from(&block_queue);
 
 		let awake = match config.mode { Mode::Dark(..) | Mode::Off => false, _ => true };
+
 
 		let client = Arc::new(Client {
 			enabled: AtomicBool::new(true),
@@ -367,6 +374,10 @@ impl Client {
 			return Err(());
 		};
 
+        // TODO - do the block importing after the enaction with actually seals the block with a
+        // nonce
+
+
 		// Check if Parent is in chain
 		let chain_has_parent = chain.block_header(header.parent_hash());
 		if let Some(parent) = chain_has_parent {
@@ -443,6 +454,7 @@ impl Client {
 
 			for block in blocks {
 				let header = &block.header;
+                println!("Import verified block {}", header.number());
 				let is_invalid = invalid_blocks.contains(header.parent_hash());
 				if is_invalid {
 					invalid_blocks.insert(header.hash());
@@ -457,6 +469,17 @@ impl Client {
 
 						let route = self.commit_block(closed_block, &header.hash(), &block.bytes);
 						import_results.push(route);
+
+                        let id = BlockId::Hash(header.hash());
+                        match self.block(id) {
+                          Some(block) => {
+                              self.write_db(&block, &header);
+                          },
+                          _ => {
+                            println!("npm");
+                          }
+                        }
+
 
 						self.report.write().accrue_block(&block);
 					}
@@ -484,6 +507,9 @@ impl Client {
 					self.miner.chain_new_blocks(self, &imported_blocks, &invalid_blocks, &enacted, &retracted);
 				}
 
+                println!("imported {:?}", imported_blocks);
+
+
 				self.notify(|notify| {
 					notify.new_blocks(
 						imported_blocks.clone(),
@@ -508,6 +534,7 @@ impl Client {
 	fn import_old_block(&self, block_bytes: Bytes, receipts_bytes: Bytes) -> Result<H256, ::error::Error> {
 		let block = BlockView::new(&block_bytes);
 		let header = block.header();
+        println!("importing old block {}", header.number());
 		let hash = header.hash();
 		let _import_lock = self.import_lock.lock();
 		{
@@ -537,8 +564,91 @@ impl Client {
 		Ok(hash)
 	}
 
+    fn write_block(&self, conn: &Connection, block: &encoded::Block, header: &Header) {
+
+        // let header = block.block().header();
+        // let seal_fields = block.header.seal();
+        let mixHash: Vec<String> = header.seal()[0].iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+        let nonce: Vec<String> = header.seal()[1].iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+        let extraData: Vec<String> = header.extra_data().iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+        let size = block.rlp().as_raw().len();
+
+        let view = block.header_view();
+
+        conn.execute("INSERT INTO \"block\" (
+        \"author\"          ,
+        \"difficulty\"      ,
+        \"extraData\"       ,
+        \"gasLimit\"        ,
+        \"gasUsed\"         ,
+        \"hash\"            ,
+        \"logsBloom\"       ,
+        \"mixHash\"         ,
+        \"nonce\"           ,
+        \"number\"          ,
+        \"parentHash\"      ,
+        \"receiptsRoot\"    ,
+        \"sha3Uncles\"      ,
+        \"size\"            ,
+        \"stateRoot\"       ,
+        \"timestamp\"       ,
+        \"totalDifficulty\" ,
+        \"transactionsRoot\"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        ", &[
+            &format!("{}", view.author()),
+            &format!("{}", header.difficulty()),
+            &format!("{}", extraData.connect("")),
+            &format!("{}", header.gas_limit()),
+            &format!("{}", header.gas_used()),
+            &format!("{}", header.hash()),
+            &format!("{}", header.log_bloom()),
+            &format!("{}", mixHash.connect("")),
+            &format!("{}", nonce.connect("")),
+            &format!("{}", header.number()),
+            &format!("{}", header.parent_hash()),
+            &format!("{}", header.receipts_root()),
+            &format!("{}", header.uncles_hash()),
+            &format!("{}", size),
+            &format!("{}", header.state_root()),
+            &format!("{}", header.timestamp()),
+            &format!(""),
+            &format!("{}", header.transactions_root())
+        ]).unwrap();
+
+    }
+
+    fn write_tx(&self, conn: Connection, tx: &LocalizedTransaction) {
+        println!("tx {:?}", tx);
+    }
+
+    fn write_db(&self, block: &encoded::Block, header: &Header) {
+
+        let conn = Connection::connect("postgres://mhhf@localhost/mhhf", TlsMode::None).unwrap();
+
+        self.write_block(&conn, &block, &header);
+
+        let txs = block.view().localized_transactions().into_iter();
+
+        // for tx in txs {
+        //     self.write_tx(&conn, &tx);
+        // }
+
+        // println!("txs: {}", block.view().localized_transactions());
+
+    }
+
+    // TODO - maybe this is wehre the blocks getting imported
 	fn commit_block<B>(&self, block: B, hash: &H256, block_data: &[u8]) -> ImportRoute where B: IsBlock + Drain {
 		let number = block.header().number();
+        // println!("INHERE");
+
 		let parent = block.header().parent_hash().clone();
 		let chain = self.chain.read();
 
@@ -550,7 +660,6 @@ impl Client {
 			.collect();
 
 		//let traces = From::from(block.traces().clone().unwrap_or_else(Vec::new));
-
 		let mut batch = DBTransaction::new();
 		// CHECK! I *think* this is fine, even if the state_root is equal to another
 		// already-imported block of the same number.
@@ -573,6 +682,7 @@ impl Client {
 		self.db.read().write_buffered(batch);
 		chain.commit();
 		self.update_last_hashes(&parent, hash);
+
 
 		if let Err(e) = self.prune_ancient(state, &chain) {
 			warn!("Failed to prune ancient state data: {}", e);
@@ -1547,6 +1657,7 @@ impl MiningBlockChainClient for Client {
 	}
 
 	fn import_sealed_block(&self, block: SealedBlock) -> ImportResult {
+        println!("IMPORT SEALED BLOCK");
 		let h = block.header().hash();
 		let start = precise_time_ns();
 		let route = {
@@ -1556,13 +1667,17 @@ impl MiningBlockChainClient for Client {
 
 			let number = block.header().number();
 			let block_data = block.rlp_bytes();
+            println!("FADASDA");
 			let route = self.commit_block(block, &h, &block_data);
+
+// COMMIT BLOCK
 			trace!(target: "client", "Imported sealed block #{} ({})", number, h);
 			self.state_db.lock().sync_cache(&route.enacted, &route.retracted, false);
 			route
 		};
 		let (enacted, retracted) = self.calculate_enacted_retracted(&[route]);
 		self.miner.chain_new_blocks(self, &[h.clone()], &[], &enacted, &retracted);
+
 		self.notify(|notify| {
 			notify.new_blocks(
 				vec![h.clone()],

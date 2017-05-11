@@ -140,7 +140,7 @@ impl Informant {
 		info!(target: "import", "{}  {}  {}  {}",
 			match importing {
 				true => match snapshot_sync {
-					false => format!("Syncing {} {}  {}  {}+{} Qed",
+					false => format!("sssSyncing {} {}  {}  {}+{} Qed",
 						paint(White.bold(), format!("{:>8}", format!("#{}", chain_info.best_block_number))),
 						paint(White.bold(), format!("{}", chain_info.best_block_hash)),
 						{
@@ -154,7 +154,7 @@ impl Informant {
 						paint(Green.bold(), format!("{:5}", queue_info.unverified_queue_size)),
 						paint(Green.bold(), format!("{:5}", queue_info.verified_queue_size))
 					),
-					true => format!("Syncing snapshot {}/{}", snapshot_current, snapshot_total),
+					true => format!("sssaaSyncing snapshot {}/{}", snapshot_current, snapshot_total),
 				},
 				false => String::new(),
 			},
@@ -199,6 +199,7 @@ impl Informant {
 
 impl ChainNotify for Informant {
 	fn new_blocks(&self, imported: Vec<H256>, _invalid: Vec<H256>, _enacted: Vec<H256>, _retracted: Vec<H256>, _sealed: Vec<H256>, _proposed: Vec<Bytes>, duration: u64) {
+        println!("Informant >> new_blocks");
 		let mut last_import = self.last_import.lock();
 		let sync_state = self.sync.as_ref().map(|s| s.status().state);
 		let importing = is_major_importing(sync_state, self.client.queue_info());

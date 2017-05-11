@@ -51,6 +51,7 @@ parity-local-store = { path = "local-store" }
 ethcore-dapps = { path = "dapps", optional = true }
 clippy = { version = "0.0.103", optional = true}
 ethcore-secretstore = { path = "secret_store", optional = true }
+postgres = "0.14"
 
 [dev-dependencies]
 ethcore-ipc-tests = { path = "ipc/tests" }

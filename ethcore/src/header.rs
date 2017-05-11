@@ -191,7 +191,9 @@ impl Header {
 	/// Set the difficulty field of the header.
 	pub fn set_difficulty(&mut self, a: U256) { self.difficulty = a; self.note_dirty(); }
 	/// Set the seal field of the header.
-	pub fn set_seal(&mut self, a: Vec<Bytes>) { self.seal = a; self.note_dirty(); }
+	pub fn set_seal(&mut self, a: Vec<Bytes>) {
+        self.seal = a; self.note_dirty();
+    }
 
 	/// Get the hash of this header (sha3 of the RLP).
 	pub fn hash(&self) -> H256 {
