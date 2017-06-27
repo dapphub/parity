@@ -52,6 +52,11 @@ stats = { path = "../util/stats" }
 time = "0.1"
 transient-hashmap = "0.4"
 
+# dupphub changes
+postgres = "0.14.2"
+postgres_array = "0.7.1"
+# dupphub changes
+
 [dev-dependencies]
 native-contracts = { path = "native_contracts", features = ["test_contracts"] }
 

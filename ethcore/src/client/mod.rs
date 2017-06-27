@@ -24,6 +24,9 @@ mod test_client;
 mod trace;
 mod client;
 
+// dupphub tests
+mod database;
+
 pub use self::client::*;
 pub use self::config::{Mode, ClientConfig, DatabaseCompactionProfile, BlockChainConfig, VMType};
 pub use self::error::Error;

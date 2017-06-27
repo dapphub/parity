@@ -105,6 +105,9 @@ extern crate stats;
 extern crate time;
 extern crate transient_hashmap;
 
+extern crate postgres;
+extern crate postgres_array;
+
 #[macro_use]
 extern crate log;
 #[macro_use]

@@ -74,6 +74,10 @@ use verification::{PreverifiedBlock, Verifier};
 use verification::queue::BlockQueue;
 use views::BlockView;
 
+//dupphub changes
+use postgres::{Connection, TlsMode};
+use client::database::sync_test;
+
 // re-export
 pub use types::blockchain_info::BlockChainInfo;
 pub use types::block_status::BlockStatus;
@@ -478,6 +482,7 @@ impl Client {
 
 			for block in blocks {
 				let header = &block.header;
+				println!("Import verified block {}", header.number()); //dupphub changes
 				let is_invalid = invalid_blocks.contains(header.parent_hash());
 				if is_invalid {
 					invalid_blocks.insert(header.hash());
@@ -492,6 +497,18 @@ impl Client {
 
 						let route = self.commit_block(closed_block, &header.hash(), &block.bytes);
 						import_results.push(route);
+
+						//Test from denis
+						let id = BlockId::Hash(header.hash());
+                        match self.block(id) {
+                          Some(block) => {
+                              self.write_db(&block, &header);
+                          },
+                          _ => {
+                            println!("npm");
+                          }
+                        }
+						// end test from denis
 
 						self.report.write().accrue_block(&block);
 					}
@@ -995,6 +1012,88 @@ impl Client {
 			data: data,
 		}.fake_sign(from)
 	}
+
+	fn write_block(&self, conn: &Connection, block: &encoded::Block, header: &Header) {
+
+		sync_test();
+        // let header = block.block().header();
+        // let seal_fields = block.header.seal();
+        let mix_hash: Vec<String> = header.seal()[0].iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+        let nonce: Vec<String> = header.seal()[1].iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+        let extra_data: Vec<String> = header.extra_data().iter()
+                               .map(|b| format!("{:02X}", b))
+                               .collect();
+        let size = block.rlp().as_raw().len();
+
+        let view = block.header_view();
+
+        conn.execute("INSERT INTO \"block\" (
+        \"author\"          ,
+        \"difficulty\"      ,
+        \"extraData\"       ,
+        \"gasLimit\"        ,
+        \"gasUsed\"         ,
+        \"hash\"            ,
+        \"logsBloom\"       ,
+        \"mixHash\"         ,
+        \"nonce\"           ,
+        \"number\"          ,
+        \"parentHash\"      ,
+        \"receiptsRoot\"    ,
+        \"sha3Uncles\"      ,
+        \"size\"            ,
+        \"stateRoot\"       ,
+        \"timestamp\"       ,
+        \"totalDifficulty\" ,
+        \"transactionsRoot\"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        ", &[
+            &format!("{}", view.author()),
+            &format!("{}", header.difficulty()),
+            &format!("{}", extra_data.connect("")),
+            &format!("{}", header.gas_limit()),
+            &format!("{}", header.gas_used()),
+            &format!("{}", header.hash()),
+            &format!("{}", header.log_bloom()),
+            &format!("{}", mix_hash.connect("")),
+            &format!("{}", nonce.connect("")),
+            &format!("{}", header.number()),
+            &format!("{}", header.parent_hash()),
+            &format!("{}", header.receipts_root()),
+            &format!("{}", header.uncles_hash()),
+            &format!("{}", size),
+            &format!("{}", header.state_root()),
+            &format!("{}", header.timestamp()),
+            &format!(""),
+            &format!("{}", header.transactions_root())
+        ]).unwrap();
+
+    }
+
+    fn write_tx(&self, conn: Connection, tx: &LocalizedTransaction) {
+        println!("tx {:?}", tx);
+    }
+
+    fn write_db(&self, block: &encoded::Block, header: &Header) {
+
+        let conn = Connection::connect("postgres://postgres:Simon5@localhost/parity_test01", TlsMode::None).unwrap();
+
+        self.write_block(&conn, &block, &header);
+
+        let txs = block.view().localized_transactions().into_iter();
+
+        // for tx in txs {
+        //     self.write_tx(&conn, &tx);
+        // }
+
+        // println!("txs: {}", block.view().localized_transactions());
+
+    }
+
 }
 
 impl snapshot::DatabaseRestore for Client {
